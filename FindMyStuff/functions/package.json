@@ -1,0 +1,28 @@
+{
+  "name": "findmystuff-functions",
+  "description": "Cloud Functions for FindMyStuff app",
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "shell": "npm run build && firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "18"
+  },
+  "main": "lib/index.js",
+  "dependencies": {
+    "firebase-admin": "^11.10.1",
+    "firebase-functions": "^4.5.0",
+    "geofirestore-common": "^5.2.0"
+  },
+  "devDependencies": {
+    "@types/firebase-functions": "^2.0.0",
+    "@types/node": "^16.18.68",
+    "typescript": "^4.9.0"
+  },
+  "private": true
+}
