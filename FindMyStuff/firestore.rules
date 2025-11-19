@@ -1,0 +1,112 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null && request.auth.uid != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function canReadUser(userData) {
+      return isAuthenticated() && (
+        isOwner(userData.id) ||
+        (userData.data.isVerified == true)
+      );
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if canReadUser(get(/databases/$(database)/documents/users/$(userId)));
+      allow write: if isOwner(userId);
+      allow create: if isAuthenticated() &&
+        isOwner(userId) &&
+        request.resource.data.keys().hasAll(['uid', 'email', 'displayName', 'createdAt']) &&
+        request.resource.data.uid == userId;
+    }
+
+    // Lost items collection
+    match /lostItems/{itemId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.keys().hasAll(['userId', 'title', 'description', 'category', 'location', 'dateLost', 'createdAt']);
+      allow update: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid;
+    }
+
+    // Found items collection
+    match /foundItems/{itemId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.keys().hasAll(['userId', 'title', 'description', 'category', 'location', 'dateFound', 'createdAt']);
+      allow update: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() &&
+        resource.data.userId == request.auth.uid;
+    }
+
+    // Matches collection
+    match /matches/{matchId} {
+      // Users can read matches they are involved in
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.matchedUserId == request.auth.uid
+      );
+
+      // Only system or matching algorithm can create matches
+      allow create: if false; // Created by Cloud Functions
+
+      allow update: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.matchedUserId == request.auth.uid
+      );
+    }
+
+    // Messages collection
+    match /messages/{messageId} {
+      // Users can read messages they send or receive
+      allow read: if isAuthenticated() && (
+        resource.data.senderId == request.auth.uid ||
+        resource.data.receiverId == request.auth.uid
+      );
+
+      // Users can send messages in matches they're part of
+      allow create: if isAuthenticated() &&
+        request.resource.data.senderId == request.auth.uid &&
+        request.resource.data.receiverId != request.auth.uid &&
+        request.resource.data.keys().hasAll(['matchId', 'senderId', 'receiverId', 'content', 'createdAt']);
+
+      // Users can update read status of messages they receive
+      allow update: if isAuthenticated() &&
+        resource.data.receiverId == request.auth.uid &&
+        request.resource.data.keys().hasAll(['isRead', 'readAt']) &&
+        request.resource.data.isRead == true;
+    }
+
+    // Ratings collection
+    match /ratings/{ratingId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+        request.resource.data.raterId == request.auth.uid &&
+        request.resource.data.ratedUserId != request.auth.uid &&
+        request.resource.data.keys().hasAll(['matchId', 'raterId', 'ratedUserId', 'rating', 'createdAt']) &&
+        request.resource.data.rating >= 1 &&
+        request.resource.data.rating <= 5;
+
+      // Ratings cannot be updated after creation
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // Deny all other reads/writes
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
